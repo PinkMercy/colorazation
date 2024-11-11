@@ -1,9 +1,9 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk
-import matplotlib.pyplot as plt
+import numpy as np
 import torch
-from colorizers import *
+from colorizers import *  # Ensure this module is correctly installed
 
 # Initialize colorizers
 colorizer_eccv16 = eccv16(pretrained=True).eval()
@@ -13,6 +13,13 @@ colorizer_siggraph17 = siggraph17(pretrained=True).eval()
 root = tk.Tk()
 root.title("Image Colorization")
 root.geometry("800x600")
+
+# Function to load and preprocess the image
+def load_img(img_path):
+    img = Image.open(img_path)
+    if img.mode != "RGB":
+        img = img.convert("RGB")  # Ensure the image is in RGB format
+    return np.array(img)  # Convert to NumPy array for compatibility
 
 # Function to load and colorize the selected image
 def colorize_image():
@@ -30,9 +37,12 @@ def colorize_image():
         out_img_eccv16 = postprocess_tens(tens_l_orig, colorizer_eccv16(tens_l_rs).cpu())
         out_img_siggraph17 = postprocess_tens(tens_l_orig, colorizer_siggraph17(tens_l_rs).cpu())
 
-        # Save output images
-        plt.imsave('output_eccv16.png', out_img_eccv16)
-        plt.imsave('output_siggraph17.png', out_img_siggraph17)
+        # Convert and save output images
+        eccv16_img = Image.fromarray((out_img_eccv16 * 255).astype(np.uint8))
+        eccv16_img.save('output_eccv16.png')
+
+        siggraph17_img = Image.fromarray((out_img_siggraph17 * 255).astype(np.uint8))
+        siggraph17_img.save('output_siggraph17.png')
 
         # Display images in GUI
         display_image(img_path, 'Original Image')
