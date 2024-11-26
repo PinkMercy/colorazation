@@ -3,16 +3,31 @@ from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk
 import numpy as np
 import torch
+import torchvision.transforms as transforms
+from torchvision import models
 from colorizers import *  # Ensure this module is correctly installed
 
 # Initialize colorizers
 colorizer_eccv16 = eccv16(pretrained=True).eval()
 colorizer_siggraph17 = siggraph17(pretrained=True).eval()
 
+# Load a pre-trained image classification model (EfficientNet-B0)
+classifier = models.efficientnet_b0(pretrained=True).eval()
+
+# Define image preprocessing for the classifier
+classifier_transform = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
+
+# Load ImageNet labels for classification
+imagenet_labels = {idx: label.strip() for idx, label in enumerate(open("imagenet_classes.txt").readlines())}
+
 # Set up the main application window
 root = tk.Tk()
-root.title("Image Colorization")
-root.geometry("800x600")
+root.title("Image Colorization and Classification")
+root.geometry("1200x800")
 
 # Function to load and preprocess the image
 def load_img(img_path):
@@ -20,6 +35,19 @@ def load_img(img_path):
     if img.mode != "RGB":
         img = img.convert("RGB")  # Ensure the image is in RGB format
     return np.array(img)  # Convert to NumPy array for compatibility
+
+# Function to classify an image
+def classify_image(img_path):
+    try:
+        img = Image.open(img_path).convert("RGB")
+        img_tensor = classifier_transform(img).unsqueeze(0)  # Add batch dimension
+        with torch.no_grad():
+            outputs = classifier(img_tensor)
+            _, predicted_idx = outputs.max(1)
+            class_name = imagenet_labels[predicted_idx.item()]
+        return class_name
+    except Exception as e:
+        return f"Classification error: {e}"
 
 # Function to load and colorize the selected image
 def colorize_image():
@@ -45,23 +73,33 @@ def colorize_image():
         siggraph17_img.save('output_siggraph17.png')
 
         # Display images in GUI
-        display_image(img_path, 'Original Image')
-        display_image('output_eccv16.png', 'Output (ECCV 16)')
-        display_image('output_siggraph17.png', 'Output (SIGGRAPH 17)')
+        display_images_side_by_side([
+            (img_path, 'Original Image'),
+            ('output_eccv16.png', 'Output (ECCV 16)'),
+            ('output_siggraph17.png', 'Output (SIGGRAPH 17)'),
+        ])
+
+        # Perform classification
+        class_name = classify_image(img_path)
+        messagebox.showinfo("Classification Result", f"Predicted Class: {class_name}")
 
     except Exception as e:
         messagebox.showerror("Error", f"An error occurred: {e}")
 
-# Function to display an image in the GUI
-def display_image(image_path, title):
-    img = Image.open(image_path).resize((256, 256))
-    img_tk = ImageTk.PhotoImage(img)
-    label = tk.Label(root, image=img_tk, text=title, compound="top", font=("Arial", 12))
-    label.image = img_tk  # Keep a reference to avoid garbage collection
-    label.pack(pady=10)
+# Function to display images side by side
+def display_images_side_by_side(image_data):
+    frame = tk.Frame(root)
+    frame.pack(pady=20)
 
-# Button to select and colorize an image
-btn = tk.Button(root, text="Select Image to Colorize", command=colorize_image, font=("Arial", 14))
+    for image_path, title in image_data:
+        img = Image.open(image_path).resize((256, 256))
+        img_tk = ImageTk.PhotoImage(img)
+        label = tk.Label(frame, image=img_tk, text=title, compound="top", font=("Arial", 12))
+        label.image = img_tk  # Keep a reference to avoid garbage collection
+        label.pack(side="left", padx=10)
+
+# Button to select and process an image
+btn = tk.Button(root, text="Select Image to Colorize and Classify", command=colorize_image, font=("Arial", 14))
 btn.pack(pady=20)
 
 # Start the main GUI loop
